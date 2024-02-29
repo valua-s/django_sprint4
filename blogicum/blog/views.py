@@ -124,6 +124,16 @@ class CommentMixin(LoginRequiredMixin):
                             kwargs={'post_id': self.object.post.id})
 
 
+class ChangeCommentMixin():
+
+    def dispatch(self, request, *args, **kwargs):
+        instance = get_object_or_404(Comment,
+                                     post=self.kwargs['post_id'])
+        if instance.author != request.user:
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
 class CommentCreateView(CommentMixin, CreateView):
     template_name = 'blog/detail.html'
     pk_url_kwarg = 'post_id'
@@ -135,28 +145,14 @@ class CommentCreateView(CommentMixin, CreateView):
         return super().form_valid(form)
 
 
-class CommentUpdateView(CommentMixin, UpdateView):
+class CommentUpdateView(CommentMixin, ChangeCommentMixin, UpdateView):
     template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
 
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Comment,
-                                     post=self.kwargs['post_id'])
-        if instance.author != request.user:
-            raise PermissionDenied
-        return super().dispatch(request, *args, **kwargs)
 
-
-class CommentDeleteView(CommentMixin, DeleteView):
+class CommentDeleteView(CommentMixin, ChangeCommentMixin, DeleteView):
     template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
-
-    def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Comment,
-                                     post=self.kwargs['post_id'])
-        if instance.author != request.user:
-            raise PermissionDenied
-        return super().dispatch(request, *args, **kwargs)
 
 
 class ProfileDetailView(ListView):
