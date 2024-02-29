@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Count
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
@@ -63,13 +63,13 @@ class PostMixin(LoginRequiredMixin):
     template_name = 'blog/create.html'
 
 
-class PostChangeMixin():
+class PostChangeMixin(PostMixin):
 
     def dispatch(self, request, *args, **kwargs):
-        instance = get_object_or_404(Post, pk=kwargs['post_id'])
+        instance = get_object_or_404(Post, id=self.kwargs['post_id'])
         if instance.author != request.user:
-            return reverse(
-                'blog:post_detail', kwargs={'post_id': instance.id})
+            return redirect(
+                'blog:post_detail', post_id=self.kwargs['post_id'])
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -81,6 +81,11 @@ class PostDetailView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         post = get_object_or_404(Post, pk=self.kwargs['post_id'])
+        if post.author != self.request.user:
+            post = get_object_or_404(Post, pk=self.kwargs['post_id'],
+                                     is_published=True,
+                                     pub_date__lte=(timezone.now()),
+                                     category__is_published=True,)
         comments = Comment.objects.filter(post=self.object)
         context.update({
             'post': post,
@@ -101,14 +106,14 @@ class PostCreateView(PostMixin, CreateView):
             'blog:profile', kwargs={'username': self.request.user})
 
 
-class PostUpdateView(PostMixin, PostChangeMixin, UpdateView):
+class PostUpdateView(PostChangeMixin, UpdateView):
 
     def get_success_url(self):
         return reverse_lazy(
             'blog:post_detail', kwargs={'post_id': self.object.id})
 
 
-class PostDeleteView(PostMixin, PostChangeMixin, DeleteView):
+class PostDeleteView(PostChangeMixin, DeleteView):
 
     def get_success_url(self):
         return reverse_lazy(
@@ -124,11 +129,13 @@ class CommentMixin(LoginRequiredMixin):
                             kwargs={'post_id': self.object.post.id})
 
 
-class ChangeCommentMixin():
+class ChangeCommentMixin(CommentMixin):
+    template_name = 'blog/comment.html'
+    pk_url_kwarg = 'comment_id'
 
     def dispatch(self, request, *args, **kwargs):
         instance = get_object_or_404(Comment,
-                                     post=self.kwargs['post_id'])
+                                     id=self.kwargs['comment_id'])
         if instance.author != request.user:
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
@@ -145,14 +152,12 @@ class CommentCreateView(CommentMixin, CreateView):
         return super().form_valid(form)
 
 
-class CommentUpdateView(CommentMixin, ChangeCommentMixin, UpdateView):
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
+class CommentUpdateView(ChangeCommentMixin, UpdateView):
+    pass
 
 
-class CommentDeleteView(CommentMixin, ChangeCommentMixin, DeleteView):
-    template_name = 'blog/comment.html'
-    pk_url_kwarg = 'comment_id'
+class CommentDeleteView(ChangeCommentMixin, DeleteView):
+    pass
 
 
 class ProfileDetailView(ListView):
