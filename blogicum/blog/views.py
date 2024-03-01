@@ -70,8 +70,9 @@ class PostDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         post = get_object_or_404(Post, pk=self.kwargs['post_id'])
         if post.author != self.request.user:
-            post = base_post_list_filter().filter(pk=self.kwargs['post_id'])
-            if post is None:
+            try:
+                post = base_post_list_filter().get(pk=self.kwargs['post_id'])
+            except post.DoesNotExist:
                 raise Http404()
         comments = post.comment.all()
         context.update({
